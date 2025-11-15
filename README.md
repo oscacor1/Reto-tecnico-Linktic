@@ -62,13 +62,13 @@ Api Key de las APIS: ENV INTERNAL_API_KEY=super-secret-key
 
    Frontend disponible en: http://localhost:5173
 
-## Uso básico
+## Objetivo
 
 1. Crear productos usando Product Service (via Swagger o postman).
 2. Inicializar inventario para un producto desde Inventory Service (`POST /api/v1/inventory`).  
 3. Desde el frontend, listar productos, ver detalle y realizar compras para actualizar el inventario.
 
-> Recuerde enviar siempre el header `X-API-Key: super-secret-key` para consumir los servicios.
+Recuerde enviar siempre el header `X-API-Key: super-secret-key` para consumir los servicios.
 
 ## Pruebas backend
 
@@ -94,8 +94,72 @@ npm test
 
 Validar Diagrama de Arquitectura AWS propuesto
 
-- Reemplazar SQLite por un motor gestionado (PostgreSQL, MySQL) y una base separada para Inventory Service. se relaciona diagrama en docs\diagrams
+- Separar bases de datos por microservicio (PostgreSQL para productos, Redis/DB para inventarios), se relaciona diagrama en docs\diagrams
 - Introducir un API Gateway / BFF que centralice autenticación y versionado.
 - Implementar un bus de eventos (Kafka, RabbitMQ) o se puede gestionar con servcios de AWS como SQS  para emitir eventos de cambios de inventario en lugar de logs. y SNS para notifdicar a los usuarios
 - Añadir observabilidad (tracing distribuido, métricas y logs estructurados). con servicios como cloudfont y xray
 - Desplegar en Kubernetes o ECS de clusters de EC2 con autoescalado HDA y/O KEDA basado en métricas de CPU o RAM.
+- Agregar autenticacion con
+- OAuth2 / OIDC
+- JWT
+- API Gateway con validación de tokens
+- mTLS entre microservicios (en transito)
+
+## Propuesta de estrategia de Brach (GitFlow) - Feature Branch
+
+Estrategia de ramas (GitFlow)
+Se utiliza un modelo GitFlow adaptado:
+Master o main: rama estable, lista para producción.
+develop: rama de integración continua de features.
+Ramas de soporte:
+feature/: nuevas funcionalidades ideal cuando hay varios devs trabajando
+release/: preparación de releases.
+hotfix/: correcciones críticas en producción.
+
+### detalle tecnico solución Backend (microservicios)
+
+1. *Product Service*
+   - Framework: **FastAPI**
+   - Persistencia: **SQLite (SQL)**
+   - Responsabilidades:
+     - CRUD completo de productos
+     - Paginación con parámetros `page[number]` y `page[size]`
+     - Exposición de API bajo `/api/v1/products`
+   - Documentación automática con **Swagger/OpenAPI**
+
+2. *Inventory Service*
+   - Framework: **FastAPI**
+   - Persistencia: **almacenamiento en memoria** (simulando un store simple; como mejora se puede implemntar Redis de elasticache
+   - Responsabilidades:
+     - Consultar la cantidad disponible de un producto
+     - Validar la existencia de productos llamando al Product Service
+     - Actualizar inventario tras una compra
+     - Emitir eventos básicos vía logs
+   - Manejo de resiliencia:
+     - Llamadas HTTP al Product Service con **timeouts** y **reintentos (retry)** usando `httpx`
+   - Estándar de respuesta: **JSON:API**
+   - Documentación automática con **Swagger/OpenAPI**
+
+Ambos microservicios usan:
+
+- Autenticación entre servicios mediante **API Key** (`X-API-Key`)
+- Versionado de API vía prefijo: **`/api/v1`**
+- Recuerde enviar siempre el header `X-API-Key: super-secret-key` para consumir los servicios.
+---
+
+3. *Frontend (SPA)*
+
+- Framework: **Vue.js 3** + **Vite**
+- Consumo de API:
+  - Product Service (`/api/v1/products`)
+  - Inventory Service (`/api/v1/inventory`)
+- Funcionalidades:
+  - Listar productos con paginación
+  - Ver detalles de un producto
+  - Ver cantidad disponible en inventario
+  - Simular compras y actualizar el inventario
+- Manejo de UX:
+  - Estados de carga (loading)
+  - Manejo de errores de API (control de excepciones)
+  - Interfaz sencilla, limpia y funcional
+
